@@ -20,7 +20,7 @@ phases:
         echo "password: $CODEARTIFACT_AUTH_TOKEN" >> ~/.pypirc
   build:
     commands:
-      - pip install twine
+      - pip install twine --index-url https://pypi.org/simple
       - python setup.py sdist bdist_wheel
       - python -m twine upload --repository codeartifact dist/*
       # Trigger Amazon Inspector scan
