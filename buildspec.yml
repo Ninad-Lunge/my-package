@@ -6,8 +6,6 @@ phases:
       python: 3.9
       nodejs: 14
     commands:
-      # Install jq (already installed in your environment)
-      - yum update -y
       # Install Snyk CLI with --unsafe-perm flag
       - npm install -g snyk --unsafe-perm
 
@@ -28,16 +26,22 @@ phases:
       - pip install wheel
       - python setup.py sdist bdist_wheel
 
+      # Generate requirements.txt for Snyk to scan
+      - pip freeze > requirements.txt
+
       # Scan for vulnerabilities with Snyk
       - echo "Scanning for vulnerabilities with Snyk..."
-      - snyk test --json > snyk-report.json || true
+      - snyk test --file=requirements.txt --json > snyk-report.json || true
 
       # Check for critical or high vulnerabilities and fail the build if found
       - |
-        if cat snyk-report.json | jq '.vulnerabilities[] | select(.severity == "critical" or .severity == "high")' | grep -q .; then
+        if cat snyk-report.json | jq 'if has("vulnerabilities") then .vulnerabilities[] | select(.severity == "critical" or .severity == "high") else empty end' | grep -q .; then
           echo "CRITICAL OR HIGH VULNERABILITIES FOUND! Pipeline terminated."
           cat snyk-report.json | jq '.vulnerabilities[] | select(.severity == "critical" or .severity == "high")'
           exit 1
+        elif grep -q "error" snyk-report.json; then
+          echo "WARNING: Snyk scan had errors but continuing pipeline:"
+          cat snyk-report.json
         else
           echo "No critical or high vulnerabilities found. Proceeding with upload."
         fi
@@ -54,6 +58,7 @@ phases:
       # Upload SBOM and vulnerability reports to S3
       - aws s3 cp sbom.json s3://my-pipeline-artifacts-908027380341/sbom-exports/
       - aws s3 cp snyk-report.json s3://my-pipeline-artifacts-908027380341/sbom-exports/snyk-report.json
+      - aws s3 cp requirements.txt s3://my-pipeline-artifacts-908027380341/sbom-exports/requirements.txt
 
   post_build:
     commands:
@@ -64,3 +69,4 @@ artifacts:
     - dist/*
     - sbom.json
     - snyk-report.json
+    - requirements.txt
