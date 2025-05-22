@@ -1,0 +1,28 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+  pre_build:
+    commands:
+      # Configure CodeArtifact
+      - export CODEARTIFACT_AUTH_TOKEN=`aws codeartifact get-authorization-token --domain my-package-domain --query authorizationToken --output text`
+      - aws codeartifact login --tool pip --domain my-package-domain --repository my-packages
+  build:
+    commands:
+      # Upload packages to CodeArtifact
+      - pip install twine
+      - python -m twine upload --repository codeartifact dist/*
+      # Trigger Amazon Inspector scan
+      - aws inspector2 create-finding-aggregator
+      - SCAN_ID=$(aws inspector2 start-sbom-scan --resource-ids $CODEBUILD_BUILD_ARN --output text --query 'scanId')
+      - echo "Scan ID: $SCAN_ID"
+      - aws inspector2 get-sbom-scan-results --scan-id $SCAN_ID
+  post_build:
+    commands:
+      - echo "Vulnerability scanning completed"
+
+artifacts:
+  files:
+    - scan-results.json
