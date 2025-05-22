@@ -9,6 +9,7 @@ phases:
       # Configure CodeArtifact
       - export CODEARTIFACT_AUTH_TOKEN=`aws codeartifact get-authorization-token --domain my-package-domain --query authorizationToken --output text`
       - aws codeartifact login --tool pip --domain my-package-domain --repository my-packages
+      - pip install --index-url https://pypi.org/simple twine
   build:
     commands:
       # Upload packages to CodeArtifact
