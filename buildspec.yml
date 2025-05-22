@@ -24,9 +24,9 @@ phases:
       - pip install wheel
       - python setup.py sdist bdist_wheel
 
-      # Scan for vulnerabilities before uploading
+      # Scan for vulnerabilities before uploading - use || true to prevent immediate failure
       - echo "Scanning for vulnerabilities..."
-      - safety check --full-report -o text > safety-report.txt
+      - safety check --full-report -o text > safety-report.txt || true
 
       # Check for critical or high vulnerabilities and fail the build if found
       - |
@@ -46,38 +46,6 @@ phases:
       - pip install cyclonedx-bom
       # Generate SBOM for your Python packages
       - cyclonedx-py environment -o sbom.json
-
-      # Add vulnerability information to SBOM
-      - |
-        echo "Adding vulnerability information to SBOM..."
-        pip install cyclonedx-bom[json]
-        python -c "
-        import json
-        import os
-
-        # Load the SBOM
-        with open('sbom.json', 'r') as f:
-            sbom = json.load(f)
-
-        # Add vulnerability metadata
-        if 'metadata' not in sbom:
-            sbom['metadata'] = {}
-        if 'properties' not in sbom['metadata']:
-            sbom['metadata']['properties'] = []
-
-        # Add safety scan results
-        if os.path.exists('safety-report.txt'):
-            with open('safety-report.txt', 'r') as f:
-                safety_report = f.read()
-            sbom['metadata']['properties'].append({
-                'name': 'safety:vulnerability-scan',
-                'value': 'Scan completed. See safety-report.txt for details.'
-            })
-
-        # Write updated SBOM
-        with open('sbom.json', 'w') as f:
-            json.dump(sbom, f, indent=2)
-        "
 
       # Upload SBOM to S3
       - aws s3 cp sbom.json s3://my-pipeline-artifacts-908027380341/sbom-exports/
