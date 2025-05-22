@@ -1,0 +1,17 @@
+[project]
+name = "my-package"  # Name used in pip install
+version = "0.1.0"
+description = "A simple greeting package"
+authors = [
+  { name="Ninad Lunge", email="ninad.lunge@comprinno.net" }
+]
+readme = "README.md"
+requires-python = ">=3.7"
+license = {text = "MIT"}
+
+[project.urls]
+Homepage = "https://github.com/yourusername/my-package"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
