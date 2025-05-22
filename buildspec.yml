@@ -4,11 +4,15 @@ phases:
   install:
     runtime-versions:
       python: 3.9
+      nodejs: 14
+    commands:
+      # Install required tools
+      - apt-get update && apt-get install -y jq
+      # Install Snyk CLI
+      - npm install -g snyk
+
   pre_build:
     commands:
-      # Install safety for vulnerability scanning
-      - pip install safety
-
       # Get CodeArtifact authorization token with domain owner specified
       - export CODEARTIFACT_AUTH_TOKEN=`aws codeartifact get-authorization-token --domain my-package-domain --domain-owner 908027380341 --query authorizationToken --output text`
       - aws codeartifact login --tool pip --domain my-package-domain --domain-owner 908027380341 --repository my-packages
@@ -24,15 +28,15 @@ phases:
       - pip install wheel
       - python setup.py sdist bdist_wheel
 
-      # Scan for vulnerabilities before uploading - use || true to prevent immediate failure
-      - echo "Scanning for vulnerabilities..."
-      - safety check --full-report -o text > safety-report.txt || true
+      # Scan for vulnerabilities with Snyk
+      - echo "Scanning for vulnerabilities with Snyk..."
+      - snyk test --json > snyk-report.json || true
 
       # Check for critical or high vulnerabilities and fail the build if found
       - |
-        if grep -E "severity: (Critical|High)" safety-report.txt; then
+        if cat snyk-report.json | jq '.vulnerabilities[] | select(.severity == "critical" or .severity == "high")' | grep -q .; then
           echo "CRITICAL OR HIGH VULNERABILITIES FOUND! Pipeline terminated."
-          cat safety-report.txt
+          cat snyk-report.json | jq '.vulnerabilities[] | select(.severity == "critical" or .severity == "high")'
           exit 1
         else
           echo "No critical or high vulnerabilities found. Proceeding with upload."
@@ -47,9 +51,9 @@ phases:
       # Generate SBOM for your Python packages
       - cyclonedx-py environment -o sbom.json
 
-      # Upload SBOM to S3
+      # Upload SBOM and vulnerability reports to S3
       - aws s3 cp sbom.json s3://my-pipeline-artifacts-908027380341/sbom-exports/
-      - aws s3 cp safety-report.txt s3://my-pipeline-artifacts-908027380341/sbom-exports/safety-report.txt
+      - aws s3 cp snyk-report.json s3://my-pipeline-artifacts-908027380341/sbom-exports/snyk-report.json
 
   post_build:
     commands:
@@ -59,4 +63,4 @@ artifacts:
   files:
     - dist/*
     - sbom.json
-    - safety-report.txt
+    - snyk-report.json
