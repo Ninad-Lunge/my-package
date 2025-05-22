@@ -4,16 +4,24 @@ phases:
   install:
     runtime-versions:
       python: 3.9
-  pre_build:
+    pre_build:
     commands:
-      # Configure CodeArtifact
       - export CODEARTIFACT_AUTH_TOKEN=`aws codeartifact get-authorization-token --domain my-package-domain --query authorizationToken --output text`
       - aws codeartifact login --tool pip --domain my-package-domain --repository my-packages
-      - pip install --index-url https://pypi.org/simple twine
+      - export TWINE_PASSWORD=$CODEARTIFACT_AUTH_TOKEN
+      - mkdir -p ~/.pypirc
+      - echo "[distutils]" > ~/.pypirc
+      - echo "index-servers = codeartifact" >> ~/.pypirc
+      - echo "" >> ~/.pypirc
+      - echo "[codeartifact]" >> ~/.pypirc
+      - |
+        echo "repository: https://my-package-domain-908027380341.d.codeartifact.us-east-1.amazonaws.com/pypi/my-packages/" >> ~/.pypirc
+        echo "username: aws" >> ~/.pypirc
+        echo "password: $CODEARTIFACT_AUTH_TOKEN" >> ~/.pypirc
   build:
     commands:
-      # Upload packages to CodeArtifact
       - pip install twine
+      - python setup.py sdist bdist_wheel
       - python -m twine upload --repository codeartifact dist/*
       # Trigger Amazon Inspector scan
       - aws inspector2 create-finding-aggregator
