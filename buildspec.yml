@@ -6,6 +6,9 @@ phases:
       python: 3.9
   pre_build:
     commands:
+      # Install safety for vulnerability scanning
+      - pip install safety
+
       # Get CodeArtifact authorization token with domain owner specified
       - export CODEARTIFACT_AUTH_TOKEN=`aws codeartifact get-authorization-token --domain my-package-domain --domain-owner 908027380341 --query authorizationToken --output text`
       - aws codeartifact login --tool pip --domain my-package-domain --domain-owner 908027380341 --repository my-packages
@@ -21,6 +24,20 @@ phases:
       - pip install wheel
       - python setup.py sdist bdist_wheel
 
+      # Scan for vulnerabilities before uploading
+      - echo "Scanning for vulnerabilities..."
+      - safety check --full-report -o text > safety-report.txt
+
+      # Check for critical or high vulnerabilities and fail the build if found
+      - |
+        if grep -E "severity: (Critical|High)" safety-report.txt; then
+          echo "CRITICAL OR HIGH VULNERABILITIES FOUND! Pipeline terminated."
+          cat safety-report.txt
+          exit 1
+        else
+          echo "No critical or high vulnerabilities found. Proceeding with upload."
+        fi
+
       # Upload to CodeArtifact with verbose output for debugging
       - pip install twine
       - python -m twine upload --verbose dist/*
@@ -29,8 +46,42 @@ phases:
       - pip install cyclonedx-bom
       # Generate SBOM for your Python packages
       - cyclonedx-py environment -o sbom.json
+
+      # Add vulnerability information to SBOM
+      - |
+        echo "Adding vulnerability information to SBOM..."
+        pip install cyclonedx-bom[json]
+        python -c "
+        import json
+        import os
+
+        # Load the SBOM
+        with open('sbom.json', 'r') as f:
+            sbom = json.load(f)
+
+        # Add vulnerability metadata
+        if 'metadata' not in sbom:
+            sbom['metadata'] = {}
+        if 'properties' not in sbom['metadata']:
+            sbom['metadata']['properties'] = []
+
+        # Add safety scan results
+        if os.path.exists('safety-report.txt'):
+            with open('safety-report.txt', 'r') as f:
+                safety_report = f.read()
+            sbom['metadata']['properties'].append({
+                'name': 'safety:vulnerability-scan',
+                'value': 'Scan completed. See safety-report.txt for details.'
+            })
+
+        # Write updated SBOM
+        with open('sbom.json', 'w') as f:
+            json.dump(sbom, f, indent=2)
+        "
+
       # Upload SBOM to S3
       - aws s3 cp sbom.json s3://my-pipeline-artifacts-908027380341/sbom-exports/
+      - aws s3 cp safety-report.txt s3://my-pipeline-artifacts-908027380341/sbom-exports/safety-report.txt
 
   post_build:
     commands:
@@ -40,3 +91,4 @@ artifacts:
   files:
     - dist/*
     - sbom.json
+    - safety-report.txt
