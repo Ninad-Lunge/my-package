@@ -6,10 +6,10 @@ phases:
       python: 3.9
       nodejs: 14
     commands:
-      # Install jq using yum instead of apt-get
-      - yum update -y && yum install -y jq
-      # Install Snyk CLI
-      - npm install -g snyk
+      # Install jq (already installed in your environment)
+      - yum update -y
+      # Install Snyk CLI with --unsafe-perm flag
+      - npm install -g snyk --unsafe-perm
 
   pre_build:
     commands:
