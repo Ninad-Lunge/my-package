@@ -6,8 +6,8 @@ phases:
       python: 3.9
       nodejs: 14
     commands:
-      # Install required tools
-      - apt-get update && apt-get install -y jq
+      # Install jq using yum instead of apt-get
+      - yum update -y && yum install -y jq
       # Install Snyk CLI
       - npm install -g snyk
 
