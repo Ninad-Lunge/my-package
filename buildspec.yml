@@ -6,58 +6,37 @@ phases:
       python: 3.9
   pre_build:
     commands:
-      # Set up environment
-      - echo "Setting up environment for SBOM generation"
-      - pip install --upgrade pip
-      # Configure CodeArtifact for package access
+      # Get CodeArtifact authorization token with domain owner specified
       - export CODEARTIFACT_AUTH_TOKEN=`aws codeartifact get-authorization-token --domain my-package-domain --domain-owner 908027380341 --query authorizationToken --output text`
       - aws codeartifact login --tool pip --domain my-package-domain --domain-owner 908027380341 --repository my-packages
 
+      # Set up twine credentials
+      - export TWINE_USERNAME=aws
+      - export TWINE_PASSWORD=$CODEARTIFACT_AUTH_TOKEN
+      - export TWINE_REPOSITORY_URL=https://my-package-domain-908027380341.d.codeartifact.us-east-1.amazonaws.com/pypi/my-packages/
+
   build:
     commands:
-      # Build Python package
-      - echo "Building Python package"
+      # Build your package
       - pip install wheel
       - python setup.py sdist bdist_wheel
 
-      # Upload to CodeArtifact
-      - echo "Uploading package to CodeArtifact"
+      # Upload to CodeArtifact with verbose output for debugging
       - pip install twine
-      - export TWINE_USERNAME=aws
-      - export TWINE_PASSWORD=$CODEARTIFACT_AUTH_TOKEN
-      - python -m twine upload --repository-url https://my-package-domain-908027380341.d.codeartifact.us-east-1.amazonaws.com/pypi/my-packages/ dist/*
+      - python -m twine upload --verbose dist/*
 
       # Install SBOM generation tool
-      - echo "Installing SBOM generation tool"
       - pip install cyclonedx-bom
-
       # Generate SBOM for your Python packages
-      - echo "Generating SBOM for Python packages"
       - cyclonedx-py -o sbom.json
-
-      # Add timestamp and project info to SBOM filename
-      - export TIMESTAMP=$(date +%Y%m%d%H%M%S)
-      - export PROJECT_NAME=$(python setup.py --name)
-      - export PROJECT_VERSION=$(python setup.py --version)
-      - mv sbom.json sbom-${PROJECT_NAME}-${PROJECT_VERSION}-${TIMESTAMP}.json
-
       # Upload SBOM to S3
-      - echo "Uploading SBOM to S3"
-      - aws s3 cp sbom-${PROJECT_NAME}-${PROJECT_VERSION}-${TIMESTAMP}.json s3://my-pipeline-artifacts-908027380341/sbom-exports/
-
-      # Generate a human-readable report from the SBOM
-      - echo "Generating vulnerability report"
-      - pip install cyclonedx-bom[json]
-      - python -c "import json; sbom = json.load(open('sbom-${PROJECT_NAME}-${PROJECT_VERSION}-${TIMESTAMP}.json')); print('# Dependencies in SBOM\\n'); [print(f'- {c.get(\"name\")} {c.get(\"version\")}') for c in sbom.get('components', [])]" > sbom-report.md
+      - aws s3 cp sbom.json s3://my-pipeline-artifacts-908027380341/sbom-exports/
 
   post_build:
     commands:
-      - echo "SBOM generation and upload completed"
-      - echo "SBOM file uploaded to s3://my-pipeline-artifacts-908027380341/sbom-exports/sbom-${PROJECT_NAME}-${PROJECT_VERSION}-${TIMESTAMP}.json"
+      - echo "Build completed"
 
 artifacts:
   files:
-    - sbom-*.json
-    - sbom-report.md
     - dist/*
-  discard-paths: no
+    - sbom.json
