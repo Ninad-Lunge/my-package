@@ -28,7 +28,7 @@ phases:
       # Install SBOM generation tool
       - pip install cyclonedx-bom
       # Generate SBOM for your Python packages
-      - cyclonedx-py -o sbom.json
+      - cyclonedx-py environment -o sbom.json
       # Upload SBOM to S3
       - aws s3 cp sbom.json s3://my-pipeline-artifacts-908027380341/sbom-exports/
 
