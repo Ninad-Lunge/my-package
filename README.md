@@ -112,66 +112,49 @@ aws codeartifact create-repository \
 ### 3. IAM Roles and Policies
 
 #### CodeBuild Service Role
-Create a file named `codebuild-role-trust-policy.json`:
+Contents of `codebuild-trust-policy.json`:
 ```json
 {
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Principal": {
-                "Service": "codebuild.amazonaws.com"
-            },
-            "Action": "sts:AssumeRole"
-        }
-    ]
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "codebuild.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
 }
-```
 
-Create a file named `codebuild-role-policy.json`:
+Contents of `codeartifact-policy.json`:
 ```json
 {
     "Version": "2012-10-17",
     "Statement": [
         {
             "Effect": "Allow",
-            "Resource": [
-                "arn:aws:s3:::sbom-pipeline-artifacts/*",
-                "arn:aws:s3:::sbom-security-reports/*"
-            ],
             "Action": [
-                "s3:PutObject",
-                "s3:GetObject",
-                "s3:GetObjectVersion",
-                "s3:GetBucketAcl",
-                "s3:GetBucketLocation"
-            ]
-        },
-        {
-            "Effect": "Allow",
-            "Resource": [
-                "arn:aws:logs:*:*:*"
-            ],
-            "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents"
-            ]
-        },
-        {
-            "Effect": "Allow",
-            "Resource": [
-                "arn:aws:codeartifact:*:*:repository/python-packages/python-sbom-repo/*"
-            ],
-            "Action": [
-                "codeartifact:ReadFromRepository",
                 "codeartifact:GetAuthorizationToken",
-                "codeartifact:GetRepositoryEndpoint"
-            ]
+                "codeartifact:GetRepositoryEndpoint",
+                "codeartifact:ReadFromRepository",
+                "codeartifact:PublishPackageVersion",
+                "codeartifact:PutPackageMetadata"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": "sts:GetServiceBearerToken",
+            "Resource": "*",
+            "Condition": {
+                "StringEquals": {
+                    "sts:AWSServiceName": "codeartifact.amazonaws.com"
+                }
+            }
         }
     ]
 }
-```
 
 Create the CodeBuild role:
 ```bash
@@ -296,71 +279,71 @@ aws codebuild create-project \
 ```
 
 ### 5. Create Pipeline
-Create a file named `create-pipeline.json`:
+Contents of `pipeline.json`:
 ```json
 {
-    "pipeline": {
-        "name": "python-sbom-pipeline",
-        "roleArn": "arn:aws:iam::<ACCOUNT_ID>:role/sbom-pipeline-role",
-        "artifactStore": {
-            "type": "S3",
-            "location": "sbom-pipeline-artifacts"
-        },
-        "stages": [
-            {
-                "name": "Source",
-                "actions": [
-                    {
-                        "name": "Source",
-                        "actionTypeId": {
-                            "category": "Source",
-                            "owner": "AWS",
-                            "provider": "CodeCommit",
-                            "version": "1"
-                        },
-                        "configuration": {
-                            "RepositoryName": "python-sbom-repo",
-                            "BranchName": "main"
-                        },
-                        "outputArtifacts": [
-                            {
-                                "name": "SourceOutput"
-                            }
-                        ]
-                    }
-                ]
+  "pipeline": {
+    "name": "python-sbom-pipeline",
+    "roleArn": "arn:aws:iam::908027380341:role/CodePipelineServiceRole",
+    "artifactStore": {
+      "type": "S3",
+      "location": "my-pipeline-artifacts-908027380341"
+    },
+    "stages": [
+      {
+        "name": "Source",
+        "actions": [
+          {
+            "name": "Source",
+            "actionTypeId": {
+              "category": "Source",
+              "owner": "AWS",
+              "provider": "CodeStarSourceConnection",
+              "version": "1"
             },
-            {
-                "name": "Build",
-                "actions": [
-                    {
-                        "name": "Build",
-                        "actionTypeId": {
-                            "category": "Build",
-                            "owner": "AWS",
-                            "provider": "CodeBuild",
-                            "version": "1"
-                        },
-                        "configuration": {
-                            "ProjectName": "python-sbom-build"
-                        },
-                        "inputArtifacts": [
-                            {
-                                "name": "SourceOutput"
-                            }
-                        ],
-                        "outputArtifacts": [
-                            {
-                                "name": "BuildOutput"
-                            }
-                        ]
-                    }
-                ]
-            }
+            "configuration": {
+              "ConnectionArn": "arn:aws:codestar-connections:us-east-1:908027380341:connection/0356e8cb-35a6-411f-a0a6-18304ccb28aa",
+              "FullRepositoryId": "Ninad-Lunge/my-package",
+              "BranchName": "main"
+            },
+            "outputArtifacts": [
+              {
+                "name": "SourceCode"
+              }
+            ]
+          }
         ]
-    }
+      },
+      {
+        "name": "Build",
+        "actions": [
+          {
+            "name": "BuildAndGenerateSBOM",
+            "actionTypeId": {
+              "category": "Build",
+              "owner": "AWS",
+              "provider": "CodeBuild",
+              "version": "1"
+            },
+            "configuration": {
+              "ProjectName": "python-sbom-generator"
+            },
+            "inputArtifacts": [
+              {
+                "name": "SourceCode"
+              }
+            ],
+            "outputArtifacts": [
+              {
+                "name": "BuildOutput"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
 }
-```
 
 Create the pipeline:
 ```bash
