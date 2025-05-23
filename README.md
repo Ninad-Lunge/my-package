@@ -1,5 +1,3 @@
-![AWS_Vulnerability_Scanning](https://github.com/user-attachments/assets/6f23e94c-e4e4-49d6-9978-139a92b02086)
-
 # Python SBOM Pipeline
 
 ## Purpose
@@ -13,6 +11,8 @@ This pipeline automates the generation and management of Software Bill of Materi
 - Amazon ECR: Stores container images (if containerized)
 - AWS CodeArtifact: Manages and stores Python package dependencies
 - Snyk: Performs security scanning and vulnerability assessment
+
+![AWS_Vulnerability_Scanning](https://github.com/user-attachments/assets/6f23e94c-e4e4-49d6-9978-139a92b02086)
 
 ## Pipeline Steps
 1. **Source Stage**
@@ -113,7 +113,7 @@ aws codeartifact create-repository \
 
 #### CodeBuild Service Role
 Contents of `codebuild-trust-policy.json`:
-```json
+```bash
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -126,9 +126,10 @@ Contents of `codebuild-trust-policy.json`:
     }
   ]
 }
+```
 
 Contents of `codeartifact-policy.json`:
-```json
+```bash
 {
     "Version": "2012-10-17",
     "Statement": [
@@ -155,6 +156,7 @@ Contents of `codeartifact-policy.json`:
         }
     ]
 }
+```
 
 Create the CodeBuild role:
 ```bash
@@ -172,7 +174,7 @@ aws iam put-role-policy \
 
 #### CodePipeline Service Role
 Create a file named `codepipeline-role-trust-policy.json`:
-```json
+```bash
 {
     "Version": "2012-10-17",
     "Statement": [
@@ -188,7 +190,7 @@ Create a file named `codepipeline-role-trust-policy.json`:
 ```
 
 Create a file named `codepipeline-role-policy.json`:
-```json
+```bash
 {
     "Version": "2012-10-17",
     "Statement": [
@@ -244,7 +246,7 @@ aws iam put-role-policy \
 
 ### 4. Create CodeBuild Project
 Create a file named `create-build-project.json`:
-```json
+```bash
 {
     "name": "python-sbom-build",
     "source": {
@@ -280,14 +282,14 @@ aws codebuild create-project \
 
 ### 5. Create Pipeline
 Contents of `pipeline.json`:
-```json
+```bash
 {
   "pipeline": {
     "name": "python-sbom-pipeline",
-    "roleArn": "arn:aws:iam::908027380341:role/CodePipelineServiceRole",
+    "roleArn": "arn:aws:iam::<ACCOUNT_ID>:role/CodePipelineServiceRole",
     "artifactStore": {
       "type": "S3",
-      "location": "my-pipeline-artifacts-908027380341"
+      "location": "my-pipeline-artifacts-<ACCOUNT_ID>"
     },
     "stages": [
       {
@@ -302,7 +304,7 @@ Contents of `pipeline.json`:
               "version": "1"
             },
             "configuration": {
-              "ConnectionArn": "arn:aws:codestar-connections:us-east-1:908027380341:connection/0356e8cb-35a6-411f-a0a6-18304ccb28aa",
+              "ConnectionArn": "arn:aws:codestar-connections:us-east-1:<ACCOUNT_ID>:connection/<CONNECTION_ID>",
               "FullRepositoryId": "Ninad-Lunge/my-package",
               "BranchName": "main"
             },
@@ -344,6 +346,7 @@ Contents of `pipeline.json`:
     ]
   }
 }
+```
 
 Create the pipeline:
 ```bash
